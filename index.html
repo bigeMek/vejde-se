@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vejde se? – plánovač nábytku do půdorysu</title>
+<meta name="description" content="Nahraj svůj okótovaný půdorys, nastav měřítko a rozmísti nábytek ve správné velikosti. Zjisti, jestli se ti nábytek vejde – zdarma, přímo v prohlížeči.">
+<style>
+  :root{
+    --bg:#0f1216; --card:#171b21; --card2:#1e232b; --line:#2a313b;
+    --txt:#eef1f5; --muted:#9aa5b4; --accent:#4c9aff; --accent2:#2d6cd6; --ok:#5cc98a;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);line-height:1.55;}
+  a{color:var(--accent);text-decoration:none;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px;}
+  .btn{display:inline-block;border-radius:9px;padding:12px 22px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:.15s;}
+  .btn.primary{background:var(--accent2);color:#fff;border-color:var(--accent2);}
+  .btn.primary:hover{background:var(--accent);}
+  .btn.ghost{background:transparent;color:var(--txt);border-color:var(--line);}
+  .btn.ghost:hover{border-color:var(--accent);}
+
+  /* Nav */
+  header{position:sticky;top:0;z-index:20;background:rgba(15,18,22,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  nav{display:flex;align-items:center;justify-content:space-between;height:62px;}
+  .logo{font-weight:800;font-size:18px;letter-spacing:.3px;display:flex;align-items:center;gap:8px;}
+  .logo .dot{width:12px;height:12px;border-radius:3px;background:var(--accent);display:inline-block;}
+  nav .links{display:flex;align-items:center;gap:22px;}
+  nav .links a{color:var(--muted);font-size:14px;}
+  nav .links a:hover{color:var(--txt);}
+  @media(max-width:720px){nav .links a.navlink{display:none;}}
+
+  /* Hero */
+  .hero{padding:70px 0 50px;display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;}
+  @media(max-width:860px){.hero{grid-template-columns:1fr;padding:44px 0 30px;}}
+  .hero h1{font-size:44px;line-height:1.1;margin:0 0 18px;letter-spacing:-.5px;}
+  .hero h1 span{color:var(--accent);}
+  .hero p.lead{font-size:18px;color:var(--muted);margin:0 0 28px;max-width:520px;}
+  .cta-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .cta-note{font-size:13px;color:var(--muted);margin-top:14px;}
+  .cta-note b{color:var(--ok);}
+
+  /* Hero mock */
+  .mock{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 20px 50px rgba(0,0,0,.4);}
+  .mock .bar{display:flex;gap:6px;margin-bottom:10px;}
+  .mock .bar i{width:11px;height:11px;border-radius:50%;background:#3a414d;display:inline-block;}
+  .mock svg{width:100%;height:auto;display:block;border-radius:8px;}
+
+  /* Sections */
+  section{padding:56px 0;border-top:1px solid var(--line);}
+  h2{font-size:30px;margin:0 0 8px;letter-spacing:-.3px;}
+  .sub{color:var(--muted);margin:0 0 34px;font-size:16px;}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  @media(max-width:760px){.steps{grid-template-columns:1fr;}}
+  .step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;}
+  .step .num{width:34px;height:34px;border-radius:9px;background:var(--accent2);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+  .step h3{margin:0 0 6px;font-size:17px;}
+  .step p{margin:0;color:var(--muted);font-size:14.5px;}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  @media(max-width:760px){.grid{grid-template-columns:1fr;}}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 18px;}
+  .feat .ic{font-size:22px;margin-bottom:8px;}
+  .feat h3{margin:0 0 5px;font-size:16px;}
+  .feat p{margin:0;color:var(--muted);font-size:14px;}
+
+  /* Pricing */
+  .prices{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:760px;}
+  @media(max-width:640px){.prices{grid-template-columns:1fr;}}
+  .price{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;}
+  .price.hi{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .price .tag{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  .price .amount{font-size:34px;font-weight:800;margin:6px 0 2px;}
+  .price .amount small{font-size:15px;font-weight:500;color:var(--muted);}
+  .price ul{list-style:none;padding:0;margin:16px 0 20px;}
+  .price li{padding:6px 0 6px 26px;position:relative;color:#d6dce4;font-size:14.5px;}
+  .price li::before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:700;}
+  .price li.off{color:var(--muted);}
+  .price li.off::before{content:"•";color:var(--muted);}
+  .soon{display:inline-block;font-size:11px;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:2px 9px;margin-left:8px;vertical-align:middle;}
+
+  .cta-band{text-align:center;background:linear-gradient(180deg,var(--card),var(--bg));}
+  .cta-band h2{margin-bottom:10px;}
+  footer{border-top:1px solid var(--line);padding:30px 0;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <nav>
+      <div class="logo"><span class="dot"></span> Vejde&nbsp;se?</div>
+      <div class="links">
+        <a class="navlink" href="#jak">Jak to funguje</a>
+        <a class="navlink" href="#funkce">Funkce</a>
+        <a class="navlink" href="#cenik">Ceník</a>
+        <a class="btn primary" href="editor.html">Spustit editor</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="wrap">
+  <section class="hero" style="border-top:none">
+    <div>
+      <h1>Vejde se ti tam nábytek? <span>Zjisti to za pár minut.</span></h1>
+      <p class="lead">Nahraj svůj okótovaný půdorys, nastav měřítko a rozmísti nábytek ve skutečné velikosti. Posouvej, otáčej a hned vidíš, co se kam vejde – bez metru a bez odhadování.</p>
+      <div class="cta-row">
+        <a class="btn primary" href="editor.html">Vyzkoušet zdarma →</a>
+        <a class="btn ghost" href="#jak">Jak to funguje</a>
+      </div>
+      <div class="cta-note">Bez registrace. Běží přímo v prohlížeči. <b>Plánování je zdarma.</b></div>
+    </div>
+    <div class="mock">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="400" height="260" fill="#12151a"/>
+        <!-- room walls -->
+        <rect x="24" y="20" width="352" height="220" fill="#1b2027" stroke="#39434f" stroke-width="3"/>
+        <line x1="210" y1="20" x2="210" y2="150" stroke="#39434f" stroke-width="3"/>
+        <line x1="210" y1="150" x2="376" y2="150" stroke="#39434f" stroke-width="3"/>
+        <!-- bed -->
+        <rect x="40" y="36" width="80" height="120" rx="4" fill="#b79ede" stroke="#6f5aa0" stroke-width="2"/>
+        <rect x="44" y="40" width="72" height="22" rx="3" fill="#d6c9f0" stroke="#6f5aa0"/>
+        <!-- wardrobe -->
+        <rect x="132" y="36" width="66" height="26" rx="2" fill="#d0b88f" stroke="#8a7350" stroke-width="2"/>
+        <line x1="165" y1="37" x2="165" y2="61" stroke="#8a7350" stroke-width="1.5"/>
+        <!-- sofa -->
+        <rect x="228" y="40" width="130" height="60" rx="8" fill="#8fc7a8" stroke="#4d7d63" stroke-width="2"/>
+        <rect x="228" y="40" width="130" height="16" rx="8" fill="#4d7d63"/>
+        <!-- table -->
+        <rect x="250" y="176" width="90" height="52" rx="6" fill="#d9b98f" stroke="#8a6c45" stroke-width="2"/>
+        <!-- measure -->
+        <line x1="40" y1="170" x2="198" y2="170" stroke="#4c9aff" stroke-width="2"/>
+        <circle cx="40" cy="170" r="4" fill="#4c9aff"/><circle cx="198" cy="170" r="4" fill="#4c9aff"/>
+        <rect x="94" y="160" width="50" height="20" rx="4" fill="#1b6a3a"/>
+        <text x="119" y="174" font-size="12" fill="#fff" text-anchor="middle" font-family="Arial">2,4 m</text>
+      </svg>
+    </div>
+  </section>
+</div>
+
+<!-- JAK -->
+<div class="wrap">
+  <section id="jak">
+    <h2>Jak to funguje</h2>
+    <p class="sub">Tři kroky a máš rozvržení ve správném měřítku.</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>Nahraj půdorys</h3><p>Vlož obrázek svého okótovaného půdorysu (PNG/JPG). Nebo si zkus ukázkový.</p></div>
+      <div class="step"><div class="num">2</div><h3>Nastav měřítko</h3><p>Obtáhni jednu známou kótu (např. délku stěny) a zadej metry. Hotovo – editor zná měřítko.</p></div>
+      <div class="step"><div class="num">3</div><h3>Rozmísti nábytek</h3><p>Vybírej z katalogu se skutečnými rozměry, posouvej a otáčej. Hned vidíš, co se vejde.</p></div>
+    </div>
+  </section>
+</div>
+
+<!-- FUNKCE -->
+<div class="wrap">
+  <section id="funkce">
+    <h2>Co všechno umí</h2>
+    <p class="sub">Postavené přesně pro otázku „vejde se mi to tam".</p>
+    <div class="grid">
+      <div class="feat"><div class="ic">📐</div><h3>Skutečné měřítko</h3><p>Nábytek je vždy ve správné velikosti vůči tvému půdorysu.</p></div>
+      <div class="feat"><div class="ic">🛋️</div><h3>Katalog nábytku</h3><p>Postele, sedačky, skříně, kuchyně, koupelna – s obvyklými rozměry.</p></div>
+      <div class="feat"><div class="ic">🔄</div><h3>Posun a otáčení</h3><p>Táhni myší, otáčej po stupních i po 90°, jemně dolaď šipkami.</p></div>
+      <div class="feat"><div class="ic">🚫</div><h3>Hlídání překryvů</h3><p>Když se dva kusy reálně překryjí, zčervenají. Konec hádání.</p></div>
+      <div class="feat"><div class="ic">🚪</div><h3>Dveře a průchody</h3><p>Výseč otevírání dveří a kontrola, jestli projdeš (60–90 cm).</p></div>
+      <div class="feat"><div class="ic">📏</div><h3>Pravítko</h3><p>Změř libovolnou vzdálenost a rovnou vidíš, jestli je průchod dost široký.</p></div>
+      <div class="feat"><div class="ic">🎨</div><h3>Vlastní úpravy</h3><p>Změň rozměry, barvu, zamkni kus k pozadí nebo volně roztáhni.</p></div>
+      <div class="feat"><div class="ic">🧲</div><h3>Přichytávání a mřížka</h3><p>Nábytek přiskočí hranou k sousedovi nebo na mřížku v metrech.</p></div>
+      <div class="feat"><div class="ic">🖼️</div><h3>Export a tisk</h3><p>Ulož hotový plán jako obrázek nebo ho rovnou vytiskni.</p></div>
+    </div>
+  </section>
+</div>
+
+<!-- CENIK -->
+<div class="wrap">
+  <section id="cenik">
+    <h2>Ceník</h2>
+    <p class="sub">Plánování je zdarma. Platíš, až když si výsledek chceš nechat.</p>
+    <div class="prices">
+      <div class="price">
+        <div class="tag">Zdarma</div>
+        <div class="amount">0 Kč</div>
+        <ul>
+          <li>Nahrání vlastního půdorysu</li>
+          <li>Kalibrace měřítka</li>
+          <li>Celý katalog nábytku</li>
+          <li>Posun, otáčení, kolize, pravítko</li>
+          <li>Náhled výsledku na obrazovce</li>
+        </ul>
+        <a class="btn primary" href="editor.html" style="width:100%;text-align:center">Spustit editor</a>
+      </div>
+      <div class="price hi">
+        <div class="tag">Pro <span class="soon">brzy</span></div>
+        <div class="amount">99 Kč <small>/ jednorázově</small></div>
+        <ul>
+          <li>Uložení projektu a návrat k němu</li>
+          <li>Export PDF / hi-res bez vodoznaku</li>
+          <li>Sdílení odkazem</li>
+          <li>Více uložených variant</li>
+          <li class="off">Vše ze zdarma verze</li>
+        </ul>
+        <a class="btn ghost" href="editor.html" style="width:100%;text-align:center">Zatím vyzkoušej zdarma</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- CTA BAND -->
+<div class="wrap">
+  <section class="cta-band">
+    <h2>Vyzkoušej, než začneš stěhovat</h2>
+    <p class="sub" style="margin-bottom:22px">Pár minut teď ti ušetří zbytečně koupenou skříň, co se nevejde.</p>
+    <a class="btn primary" href="editor.html">Otevřít editor zdarma →</a>
+  </section>
+</div>
+
+<div class="wrap">
+  <footer>
+    <div>© 2026 Vejde&nbsp;se? · Plánovač nábytku do půdorysu</div>
+    <div><a href="editor.html">Editor</a> · <a href="#jak">Jak to funguje</a> · <a href="#cenik">Ceník</a></div>
+  </footer>
+</div>
+
+</body>
+</html>

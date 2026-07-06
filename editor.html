@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planovac nabytku - pudorys bytu</title>
+<style>
+  :root{
+    --bg:#1e2229; --panel:#272c35; --panel2:#2f3540; --line:#3a414d;
+    --txt:#e7eaef; --muted:#9aa3b2; --accent:#4c9aff; --accent2:#2d6cd6;
+    --danger:#e5544b; --ok:#5cc98a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);}
+  #app{display:flex;height:100vh;overflow:hidden;}
+
+  #sidebar{width:250px;flex:0 0 250px;background:var(--panel);border-right:1px solid var(--line);
+           display:flex;flex-direction:column;overflow:hidden;}
+  #sidebar h1{font-size:15px;margin:0;padding:14px 14px 10px;letter-spacing:.3px;}
+  #sidebar .sub{font-size:11px;color:var(--muted);padding:0 14px 10px;line-height:1.45;}
+  #catalog{overflow-y:auto;flex:1;padding:0 8px 12px;}
+  .cat{margin-top:10px;}
+  .cat>.cat-h{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:6px 6px;user-select:none;}
+  .cat-items{display:flex;flex-wrap:wrap;gap:6px;padding:2px;}
+  .item{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 7px;
+        font-size:12px;cursor:pointer;flex:1 1 calc(50% - 6px);min-width:0;transition:.12s;display:flex;align-items:center;gap:7px;}
+  .item:hover{border-color:var(--accent);background:#333b47;}
+  .item .ic{width:26px;height:26px;flex:0 0 26px;}
+  .item .tx{min-width:0;}
+  .item .n{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .item .d{display:block;color:var(--muted);font-size:10.5px;margin-top:1px;}
+
+  #main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  #toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);
+           border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;
+       padding:6px 11px;font-size:12.5px;cursor:pointer;transition:.12s;}
+  .btn:hover{border-color:var(--accent);}
+  .btn.danger:hover{border-color:var(--danger);color:var(--danger);}
+  .btn.active{background:var(--accent2);border-color:var(--accent);}
+  .sep{width:1px;height:22px;background:var(--line);margin:0 2px;}
+  .zoomlabel{font-size:12px;color:var(--muted);min-width:44px;text-align:center;}
+  #toolbar .spacer{flex:1;}
+  .hint{font-size:11.5px;color:var(--muted);}
+
+  #viewport{flex:1;overflow:auto;position:relative;background:#12151a;cursor:grab;
+            background-image:radial-gradient(#2a2f38 1px,transparent 1px);background-size:22px 22px;}
+  #stageWrap{position:absolute;left:0;top:0;transform-origin:0 0;}
+  #stage{position:relative;user-select:none;}
+  .bgwrap{position:absolute;pointer-events:none;}
+  .bgwrap .bgimg{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;}
+  .bgwrap .bgdel{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--danger);
+                 color:#fff;font-size:14px;line-height:18px;text-align:center;border:2px solid #fff;cursor:pointer;
+                 pointer-events:auto;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.5);}
+  .bgwrap .bgdel:hover{background:#ff6b62;}
+  #gridLayer{position:absolute;left:0;top:0;pointer-events:none;z-index:5;}
+  #scaleBar{position:absolute;z-index:6;pointer-events:none;font-family:Arial,sans-serif;}
+
+  .fur{position:absolute;cursor:grab;overflow:visible;touch-action:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));}
+  .fur svg.ficon{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .fur.sel{z-index:50;}
+  .fur.locked{cursor:default;}
+  .fur.locked.sel .handle,.fur.locked.sel .stem{display:none;}
+  .fur .lockb{display:none;position:absolute;top:-9px;left:-9px;font-size:11px;line-height:1;background:#fff;border-radius:50%;padding:2px;box-shadow:0 1px 2px #0007;z-index:3;}
+  .fur.locked .lockb{display:block;}
+  .fur .rh{display:none;position:absolute;width:12px;height:12px;background:#fff;border:2px solid var(--accent2);border-radius:2px;transform:translate(-50%,-50%);z-index:4;}
+  .fur.free.sel .rh{display:block;}
+  .fur.locked .rh{display:none;}
+  .rh-nw,.rh-se{cursor:nwse-resize;} .rh-ne,.rh-sw{cursor:nesw-resize;} .rh-n,.rh-s{cursor:ns-resize;} .rh-e,.rh-w{cursor:ew-resize;}
+  .fur.collide{outline:2px solid var(--danger)!important;outline-offset:2px;}
+  .fur.blocked{outline:2px solid var(--danger)!important;outline-offset:2px;}
+  .fur .lbl{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+            font-size:10px;line-height:1.1;text-align:center;color:#1a1f26;font-weight:700;
+            padding:1px 4px;pointer-events:none;white-space:nowrap;background:rgba(255,255,255,.82);border-radius:3px;}
+  .fur .handle{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--accent);
+               border:2px solid #fff;top:-28px;left:50%;transform:translateX(-50%);cursor:grab;display:none;}
+  .fur .stem{position:absolute;top:-26px;left:50%;width:2px;height:26px;background:var(--accent);transform:translateX(-50%);display:none;pointer-events:none;}
+  .fur .del{position:absolute;top:-11px;right:-11px;width:20px;height:20px;border-radius:50%;background:var(--danger);
+            color:#fff;font-size:13px;line-height:18px;text-align:center;border:2px solid #fff;cursor:pointer;display:none;font-weight:700;z-index:2;}
+  .fur.sel .handle,.fur.sel .stem,.fur.sel .del{display:block;}
+
+  #calibLayer,#measureLayer{position:absolute;inset:0;}
+  #calibLayer{z-index:200;cursor:crosshair;display:none;}
+  #measureLayer{z-index:160;pointer-events:none;}
+  #measureLayer.measuring{pointer-events:auto;cursor:crosshair;}
+  .calibDot,.mDot{position:absolute;width:12px;height:12px;background:#ffcf33;border:2px solid #000;border-radius:50%;transform:translate(-50%,-50%);}
+  .mDot{background:#4c9aff;}
+  #calibLine,.mLine{position:absolute;height:2px;background:#ffcf33;transform-origin:0 50%;}
+  .mLine{background:#4c9aff;height:2px;}
+  .mLabel{position:absolute;transform:translate(-50%,-50%);font-size:12px;font-weight:700;color:#fff;
+          background:#000b;padding:2px 6px;border-radius:5px;white-space:nowrap;}
+  #banner{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:300;background:#000c;
+          border:1px solid var(--accent);padding:8px 14px;border-radius:8px;font-size:13px;display:none;}
+  #status{padding:5px 12px;background:var(--panel);border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;}
+
+  #editor{position:fixed;z-index:500;width:236px;max-height:calc(100vh - 16px);background:var(--panel);border:1px solid var(--accent);
+          border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:none;flex-direction:column;font-size:12.5px;}
+  #editor .ed-head{display:flex;flex:0 0 auto;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);font-weight:600;}
+  #editor #edX{cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 2px;}
+  #editor #edX:hover{color:var(--txt);}
+  #editor .ed-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;min-height:0;}
+  #editor label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);}
+  #editor input[type=text],#editor input[type=number]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:5px 7px;font-size:13px;}
+  #editor .ed-two{display:flex;flex-direction:column;gap:9px;}
+  #editor input[type=color]{width:100%;height:30px;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:2px;cursor:pointer;}
+  #edSwatches{display:flex;flex-wrap:wrap;gap:5px;}
+  #edSwatches .sw{width:22px;height:22px;border-radius:5px;cursor:pointer;border:2px solid #0003;}
+  #edSwatches .sw:hover{border-color:#fff;}
+  #editor .ed-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  #editor .ed-actions .btn{flex:1 1 calc(50% - 3px);padding:6px 4px;font-size:12px;}
+  #edBuyList{display:none;flex-direction:column;gap:6px;margin-top:2px;padding-top:9px;border-top:1px solid var(--line);}
+  #edBuyList .hint{margin-bottom:2px;}
+  #edBuyList a{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;
+               padding:6px 8px;font-size:12px;text-decoration:none;text-align:center;}
+  #edBuyList a:hover{border-color:var(--accent);}
+  #calibBox{position:fixed;z-index:600;left:50%;top:38%;transform:translate(-50%,-50%);width:300px;background:var(--panel);border:1px solid var(--accent);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.6);display:none;}
+  #calibBox .cb-head{padding:11px 14px;border-bottom:1px solid var(--line);font-weight:600;}
+  #calibBox .cb-body{padding:14px;}
+  #calibBox label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px;}
+  #calibBox .cb-row{display:flex;gap:8px;margin-bottom:14px;}
+  #calibBox #cbVal{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:8px;font-size:15px;}
+  #calibBox #cbUnit{flex:0 0 64px;width:64px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:8px 4px;font-size:14px;}
+  #calibBox .cb-actions{display:flex;gap:8px;justify-content:flex-end;}
+  #calibBox #cbOk{background:var(--accent2);border-color:var(--accent2);color:#fff;}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1><a href="index.html" title="Zpet na hlavni stranku" style="color:inherit;text-decoration:none">&#8592; Planovac bytu</a></h1>
+    <div class="sub">Klik = pridat na plan. Leve tlacitko: tahnout nabytek nebo tahnout plochu = posun. Zluty puntik = otoceni. <b>Prave tlacitko</b> = rozmery a barva. Delete = smazat. Kolecko = zoom. Cerveny ram = prekryv.</div>
+    <div id="catalog"></div>
+  </aside>
+
+  <div id="main">
+    <div id="toolbar">
+      <button class="btn" id="zoomOut">-</button>
+      <span class="zoomlabel" id="zoomLabel">100%</span>
+      <button class="btn" id="zoomIn">+</button>
+      <button class="btn" id="zoomFit">Prizpusobit</button>
+      <div class="sep"></div>
+      <button class="btn" id="rotBtn" title="Otocit vybrany o 90 (R)">Otocit 90</button>
+      <button class="btn danger" id="delBtn" title="Smazat vybrany (Delete)">Smazat</button>
+      <div class="sep"></div>
+      <button class="btn" id="gridBtn" title="Zobrazit mrizku (0,5 m)">Mrizka: vyp</button>
+      <button class="btn" id="snapBtn" title="Prichytavani k hranam nabytku a mrizce">Prichyt: vyp</button>
+      <button class="btn" id="measBtn" title="Zmerit vzdalenost / prochod">Pravitko</button>
+      <button class="btn" id="bgBtn" title="Nahrat vlastni pudorys (PNG/JPG/WEBP). Da se nahrat i vice pudorysu vedle sebe.">Vybrat podklad</button>
+      <input type="file" id="bgInput" accept="image/png,image/jpeg,image/webp,image/*" style="display:none">
+      <button class="btn" id="calibBtn" title="Nastavit meritko podle zname koty">Kalibrovat</button>
+      <div class="spacer"></div>
+      <span class="hint" id="scaleHint"></span>
+      <div class="sep"></div>
+      <button class="btn" id="saveBtn">Ulozit</button>
+      <button class="btn" id="loadBtn">Nacist</button>
+      <button class="btn" id="exportBtn">Export PNG</button>
+      <button class="btn" id="printBtn">Tisk</button>
+      <button class="btn danger" id="clearBtn">Vymazat vse</button>
+    </div>
+
+    <div id="viewport">
+      <div id="banner"></div>
+      <div id="stageWrap">
+        <div id="stage">
+          <div id="bgLayer"></div>
+          <div id="gridLayer"></div><div id="scaleBar"></div>
+          <div id="measureLayer"></div>
+          <div id="calibLayer"><div id="calibLine" style="display:none"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="status">
+      <span id="stCount">Nabytek: 0</span>
+      <span id="stSel">Vybrano: -</span>
+      <span id="stScale"></span>
+      <span id="stWarn"></span>
+    </div>
+  </div>
+</div>
+
+<div id="editor">
+  <div class="ed-head"><span id="edTitle">Nabytek</span><span id="edX">&times;</span></div>
+  <div class="ed-body">
+    <label>Nazev<input type="text" id="edName"></label>
+    <div class="ed-two">
+      <label>Sirka (cm)<input type="number" id="edW" min="5" step="1"></label>
+      <label>Hloubka (cm)<input type="number" id="edH" min="5" step="1"></label>
+    </div>
+    <label>Barva<input type="color" id="edColor"></label>
+    <div id="edSwatches"></div>
+    <div class="ed-actions">
+      <button class="btn" id="edLock">Zamknout</button>
+      <button class="btn" id="edFree">Volne</button>
+      <button class="btn" id="edRot">Otocit 90</button>
+      <button class="btn" id="edReset">Reset</button>
+      <button class="btn" id="edDup">Kopie</button>
+      <button class="btn danger" id="edDel">Smazat</button>
+      <button class="btn" id="edBuy">Koupit</button>
+    </div>
+    <div id="edBuyList"></div>
+  </div>
+</div>
+
+<div id="calibBox">
+  <div class="cb-head">Kalibrace meritka</div>
+  <div class="cb-body">
+    <label>Skutecna vzdalenost mezi body</label>
+    <div class="cb-row"><input type="number" id="cbVal" step="any"><select id="cbUnit"><option value="m">m</option><option value="cm">cm</option></select></div>
+    <div class="cb-actions"><button class="btn" id="cbCancel">Zrusit</button><button class="btn" id="cbOk">Nastavit</button></div>
+  </div>
+</div>
+<script>
+/* ---------- Katalog: [nazev, sirka_cm, hloubka_cm, barva, typ] ---------- */
+const CATALOG = {
+  "Loznice":[
+    ["Postel 90x200",90,200,"#c7b5e6","bed"],["Postel 140x200",140,200,"#bfa8e0","bed"],
+    ["Postel 160x200",160,200,"#b79ede","bed"],["Postel 180x200",180,200,"#ad92da","bed"],["Postel 200x200",200,200,"#a689d6","bed"],
+    ["Nocni stolek",45,40,"#d9cef0","nightstand"],["Skrin 100",100,60,"#d0b88f","wardrobe"],
+    ["Skrin 150",150,60,"#c9ae80","wardrobe"],["Skrin 200",200,60,"#c2a572","wardrobe"],["Komoda",90,45,"#d8c39a","dresser"],
+    ["Toaletni stolek",100,45,"#e2d5c0","dresser"],
+  ],
+  "Obyvak":[
+    ["Pohovka 2M",160,90,"#8fc7a8","sofa"],["Pohovka 3M",210,95,"#7fbf9c","sofa"],
+    ["Rohova sedacka",260,200,"#6fb790","sofaL"],["Kreslo",80,80,"#9fd0b4","armchair"],
+    ["Konf stolek",110,60,"#bfae8f","table"],["TV stena",200,45,"#8a8f99","tv"],["Knihovna",90,35,"#cbb489","shelf"],
+    ["Taburetka",45,45,"#a9d9bb","stool"],
+  ],
+  "Jidelna":[
+    ["Stul 4os 120x80",120,80,"#d9b98f","table"],["Stul 6os 160x90",160,90,"#d3b184","table"],
+    ["Kulaty stul 120",120,120,"#dcc199","roundtable"],["Zidle",45,48,"#e0d0b0","chair"],
+    ["Lavice",120,35,"#dcc7a0","chair"],["Barova zidle",38,38,"#e6d8bc","stool"],["Pribornik",120,45,"#d8c39a","dresser"],
+  ],
+  "Kuchyn":[
+    ["Linka rovna 60",60,60,"#9db4c9","counter"],["Linka 180x60",180,60,"#8fa9c2","counter"],
+    ["Rohova linka",100,100,"#829ebb","counterL"],["Lednice",60,65,"#c6d2e0","fridge"],
+    ["Sporak",60,60,"#b7c4d6","stove"],["Kuch ostrov",120,90,"#a7bcd0","table"],
+    ["Mycka",60,60,"#93a9bd","fridge"],["Drez",60,55,"#b3c6d6","sink"],["Spajzova skrin",60,60,"#7e93a6","wardrobe"],
+  ],
+  "Koupelna WC":[
+    ["Vana 170",170,75,"#a9d3e6","bath"],["Sprchovy kout",90,90,"#bfe0ee","shower"],
+    ["Umyvadlo",60,48,"#cfe8f2","sink"],["WC",38,60,"#d7edf5","wc"],["Pracka",60,60,"#c1d9e6","washer"],
+    ["Susicka",60,60,"#b3cfe0","washer"],["Bidet",38,56,"#cdeaf5","wc"],["Koupelnova skrinka",60,35,"#bcd8e6","dresser"],
+  ],
+  "Pracovna":[
+    ["Psaci stul 120",120,60,"#d6c08c","table"],["Psaci stul 160",160,70,"#cfb884","table"],["Kancelarska zidle",60,60,"#e2d3ad","officechair"],
+    ["Kontejner",40,50,"#dcc89a","dresser"],
+  ],
+  "Dvere a prochody":[
+    ["Dvere 70",70,70,"#e8b98a","door"],["Dvere 80",80,80,"#e8b98a","door"],["Dvere 90",90,90,"#e8b98a","door"],
+    ["Prochod 60",60,150,"#f2c14a","gap"],["Prochod 80",80,150,"#7dd87d","gap"],["Prochod 90",90,150,"#7dd87d","gap"],
+  ],
+  "Ostatni":[ ["Obdelnik vlastni",100,100,"#b9bec8","rect"] ],
+};
+const PALETTE=["#c7b5e6","#b79ede","#8fc7a8","#6fb790","#d9b98f","#cfb884","#9db4c9","#829ebb",
+               "#a9d3e6","#e0d0b0","#e5544b","#f2a93b","#7dc47d","#b9bec8","#d08a8a","#8a8f99"];
+
+/* ---------- Affiliate partneri: dopln realne odkazy az budes mit ucty u CJ Affiliate a Dognet ---------- */
+const PARTNERS_DEFAULT=[
+  {name:"XXXLutz.cz",url:"#"},
+  {name:"Asko-nabytek.cz",url:"#"},
+  {name:"TMnabytek.cz",url:"#"},
+  {name:"Delife.cz",url:"#"},
+  {name:"Exterio.cz",url:"#"},
+  {name:"DekorHome.cz",url:"#"},
+];
+const PARTNERS_BY_TYPE={};
+const NO_BUY_TYPES=["door","gap"];
+function partnersFor(type){return PARTNERS_BY_TYPE[type]||PARTNERS_DEFAULT;}
+
+/* ---------- Odstiny ---------- */
+const RH=[["nw",0,0,-1,-1],["n",0.5,0,0,-1],["ne",1,0,1,-1],["e",1,0.5,1,0],["se",1,1,1,1],["s",0.5,1,0,1],["sw",0,1,-1,1],["w",0,0.5,-1,0]];
+function shade(hex,p){
+  hex=(''+hex).replace('#','');
+  if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');
+  let r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16);
+  const t=p<0?0:255,a=Math.abs(p);
+  r=Math.round((t-r)*a+r);g=Math.round((t-g)*a+g);b=Math.round((t-b)*a+b);
+  return 'rgb('+r+','+g+','+b+')';
+}
+
+/* ---------- Tvary ikon (vnitrek SVG, viewBox 0..100) ---------- */
+function furShapes(type,color){
+  const d=shade(color,-0.5),dd=shade(color,-0.72),l=shade(color,0.32),ll=shade(color,0.55);
+  switch(type){
+    case 'bed': return `<rect x="2" y="2" width="96" height="96" rx="4" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <rect x="6" y="6" width="88" height="24" rx="3" fill="${l}" stroke="${d}"/>
+      <rect x="10" y="9" width="36" height="17" rx="3" fill="${ll}" stroke="${d}"/>
+      <rect x="54" y="9" width="36" height="17" rx="3" fill="${ll}" stroke="${d}"/>
+      <rect x="7" y="34" width="86" height="60" rx="3" fill="none" stroke="${d}"/>`;
+    case 'nightstand': return `<rect x="4" y="4" width="92" height="92" rx="5" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <line x1="4" y1="46" x2="96" y2="46" stroke="${d}"/><circle cx="50" cy="25" r="5" fill="${dd}"/>`;
+    case 'wardrobe': return `<rect x="3" y="3" width="94" height="94" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <line x1="50" y1="4" x2="50" y2="96" stroke="${d}" stroke-width="2"/>
+      <rect x="41" y="40" width="4" height="20" rx="2" fill="${dd}"/><rect x="55" y="40" width="4" height="20" rx="2" fill="${dd}"/>`;
+    case 'dresser': return `<rect x="3" y="3" width="94" height="94" rx="3" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <line x1="4" y1="35" x2="96" y2="35" stroke="${d}"/><line x1="4" y1="66" x2="96" y2="66" stroke="${d}"/>
+      <circle cx="50" cy="19" r="4" fill="${dd}"/><circle cx="50" cy="50" r="4" fill="${dd}"/><circle cx="50" cy="81" r="4" fill="${dd}"/>`;
+    case 'sofa': return `<rect x="3" y="3" width="94" height="94" rx="7" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <rect x="3" y="3" width="94" height="22" rx="7" fill="${d}"/><rect x="3" y="16" width="15" height="81" rx="6" fill="${d}"/>
+      <rect x="82" y="16" width="15" height="81" rx="6" fill="${d}"/>
+      <rect x="22" y="30" width="26" height="60" rx="4" fill="${l}" stroke="${d}"/><rect x="52" y="30" width="26" height="60" rx="4" fill="${l}" stroke="${d}"/>`;
+    case 'sofaL': return `<path d="M3,3 H97 V97 H55 V55 H3 Z" fill="${color}" stroke="${d}" stroke-width="2" stroke-linejoin="round"/>
+      <rect x="3" y="3" width="94" height="18" fill="${d}"/><rect x="79" y="3" width="18" height="94" fill="${d}"/>
+      <rect x="10" y="26" width="40" height="24" rx="4" fill="${l}" stroke="${d}"/><rect x="55" y="26" width="20" height="66" rx="4" fill="${l}" stroke="${d}"/>`;
+    case 'armchair': return `<rect x="4" y="4" width="92" height="92" rx="9" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <rect x="4" y="4" width="92" height="22" rx="9" fill="${d}"/><rect x="4" y="18" width="18" height="78" rx="8" fill="${d}"/>
+      <rect x="74" y="18" width="18" height="78" rx="8" fill="${d}"/><rect x="26" y="30" width="48" height="60" rx="6" fill="${l}" stroke="${d}"/>`;
+    case 'table': return `<rect x="3" y="3" width="94" height="94" rx="6" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <line x1="8" y1="28" x2="92" y2="28" stroke="${d}" opacity=".35"/><line x1="8" y1="50" x2="92" y2="50" stroke="${d}" opacity=".35"/><line x1="8" y1="72" x2="92" y2="72" stroke="${d}" opacity=".35"/>`;
+    case 'roundtable': return `<circle cx="50" cy="50" r="47" fill="${color}" stroke="${d}" stroke-width="2"/><circle cx="50" cy="50" r="30" fill="none" stroke="${d}" opacity=".4"/>`;
+    case 'stool': return `<circle cx="50" cy="50" r="46" fill="${color}" stroke="${d}" stroke-width="2"/>`;
+    case 'chair': return `<rect x="14" y="22" width="72" height="70" rx="7" fill="${color}" stroke="${d}" stroke-width="2"/><rect x="14" y="6" width="72" height="15" rx="4" fill="${d}"/>`;
+    case 'officechair': return `<rect x="16" y="24" width="68" height="60" rx="12" fill="${color}" stroke="${d}" stroke-width="2"/><rect x="16" y="7" width="68" height="18" rx="7" fill="${d}"/><circle cx="50" cy="90" r="5" fill="${d}"/>`;
+    case 'tv': return `<rect x="2" y="2" width="96" height="96" rx="3" fill="${color}" stroke="${d}" stroke-width="2"/><rect x="12" y="18" width="76" height="64" rx="2" fill="#1b1e24" stroke="${dd}"/>`;
+    case 'shelf': return `<rect x="3" y="3" width="94" height="94" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <line x1="4" y1="36" x2="96" y2="36" stroke="${d}"/><line x1="4" y1="66" x2="96" y2="66" stroke="${d}"/>
+      <rect x="10" y="9" width="6" height="23" fill="${dd}"/><rect x="20" y="12" width="6" height="20" fill="${l}"/><rect x="30" y="10" width="6" height="22" fill="${dd}"/>
+      <rect x="12" y="40" width="6" height="22" fill="${l}"/><rect x="22" y="42" width="6" height="20" fill="${dd}"/>`;
+    case 'counter': return `<rect x="2" y="2" width="96" height="96" rx="2" fill="${color}" stroke="${d}" stroke-width="2"/><rect x="2" y="2" width="96" height="16" fill="${d}"/><line x1="2" y1="88" x2="98" y2="88" stroke="${d}" opacity=".5"/>`;
+    case 'counterL': return `<path d="M2,2 H98 V98 H60 V60 H2 Z" fill="${color}" stroke="${d}" stroke-width="2" stroke-linejoin="round"/><rect x="2" y="2" width="96" height="14" fill="${d}"/><rect x="84" y="2" width="14" height="96" fill="${d}"/>`;
+    case 'fridge': return `<rect x="3" y="3" width="94" height="94" rx="4" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <line x1="3" y1="60" x2="97" y2="60" stroke="${d}" stroke-width="1.5"/><rect x="80" y="16" width="6" height="30" rx="3" fill="${dd}"/><rect x="80" y="66" width="6" height="20" rx="3" fill="${dd}"/>`;
+    case 'stove': return `<rect x="3" y="3" width="94" height="94" rx="4" fill="${color}" stroke="${d}" stroke-width="2"/>
+      <circle cx="31" cy="34" r="13" fill="none" stroke="${dd}" stroke-width="3"/><circle cx="69" cy="34" r="13" fill="none" stroke="${dd}" stroke-width="3"/>
+      <circle cx="31" cy="72" r="13" fill="none" stroke="${dd}" stroke-width="3"/><circle cx="69" cy="72" r="13" fill="none" stroke="${dd}" stroke-width="3"/>`;
+    case 'bath': return `<rect x="3" y="3" width="94" height="94" rx="16" fill="${color}" stroke="${d}" stroke-width="2"/><rect x="12" y="12" width="76" height="76" rx="22" fill="${l}" stroke="${d}"/><circle cx="50" cy="78" r="4" fill="${d}"/>`;
+    case 'shower': return `<rect x="3" y="3" width="94" height="94" rx="3" fill="${color}" stroke="${d}" stroke-width="2"/><rect x="10" y="10" width="80" height="80" rx="4" fill="${l}" stroke="${d}"/><line x1="10" y1="90" x2="90" y2="10" stroke="${d}" opacity=".4"/><circle cx="50" cy="50" r="4" fill="${d}"/>`;
+    case 'sink': return `<rect x="3" y="3" width="94" height="94" rx="6" fill="${color}" stroke="${d}" stroke-width="2"/><ellipse cx="50" cy="56" rx="34" ry="28" fill="${l}" stroke="${d}"/><circle cx="50" cy="56" r="4" fill="${d}"/><rect x="45" y="8" width="10" height="13" rx="3" fill="${dd}"/>`;
+    case 'wc': return `<rect x="26" y="4" width="48" height="22" rx="3" fill="${color}" stroke="${d}" stroke-width="2"/><ellipse cx="50" cy="60" rx="27" ry="33" fill="${color}" stroke="${d}" stroke-width="2"/><ellipse cx="50" cy="60" rx="16" ry="21" fill="${ll}" stroke="${d}"/>`;
+    case 'washer': return `<rect x="3" y="3" width="94" height="94" rx="4" fill="${color}" stroke="${d}" stroke-width="2"/><circle cx="50" cy="57" r="32" fill="${l}" stroke="${d}" stroke-width="2"/><circle cx="50" cy="57" r="20" fill="none" stroke="${d}"/><rect x="9" y="9" width="40" height="10" rx="2" fill="${dd}"/>`;
+    case 'door': return `<path d="M2,2 L98,2 A96,96 0 0 1 2,98 Z" fill="${l}" fill-opacity="0.35" stroke="${d}" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <line x1="2" y1="2" x2="98" y2="2" stroke="${dd}" stroke-width="6"/><circle cx="4" cy="4" r="5" fill="${dd}"/>`;
+    case 'gap': return `<rect x="1" y="1" width="98" height="98" fill="${color}" fill-opacity="0.22" stroke="${shade(color,-0.3)}" stroke-width="2.5" stroke-dasharray="7 5"/>`;
+    default: return `<rect x="2" y="2" width="96" height="96" rx="4" fill="${color}" stroke="${d}" stroke-width="2"/>`;
+  }
+}
+function furSVG(type,color){return '<svg class="ficon" viewBox="3 3 94 94" preserveAspectRatio="none">'+furShapes(type,color)+'</svg>';}
+
+/* ---------- Stav ---------- */
+let IMG_W=900,IMG_H=650;
+let pxPerM=63,zoom=1,items=[],selId=null,snap=false,gridOn=false;
+let bgImages=[],bgUid=1;
+const SNAP_CM=5;let uid=1;
+
+const stageWrap=document.getElementById('stageWrap'),stage=document.getElementById('stage'),
+  bgLayer=document.getElementById('bgLayer'),viewport=document.getElementById('viewport'),
+  banner=document.getElementById('banner'),gridLayer=document.getElementById('gridLayer'),
+  measureLayer=document.getElementById('measureLayer');
+
+stage.style.width=IMG_W+'px';stage.style.height=IMG_H+'px';
+gridLayer.style.width=IMG_W+'px';gridLayer.style.height=IMG_H+'px';
+
+const bgInput=document.getElementById('bgInput');
+document.getElementById('bgBtn').onclick=()=>bgInput.click();
+bgInput.onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.type==='application/pdf'){alert('PDF zatim neni podporovane - nahraj PNG/JPG/WEBP.');bgInput.value='';return;}const rd=new FileReader();rd.onload=()=>addBackground(rd.result);rd.readAsDataURL(f);bgInput.value='';};
+function resizeStage(){IMG_W=bgImages.length?Math.max(...bgImages.map(b=>b.x+b.w)):900;IMG_H=bgImages.length?Math.max(...bgImages.map(b=>b.y+b.h)):650;stage.style.width=IMG_W+'px';stage.style.height=IMG_H+'px';gridLayer.style.width=IMG_W+'px';gridLayer.style.height=IMG_H+'px';}
+function renderBackground(bg){
+  let el=document.getElementById('bgw'+bg.id);
+  if(!el){
+    el=document.createElement('div');el.className='bgwrap';el.id='bgw'+bg.id;
+    el.innerHTML='<img class="bgimg" alt="pudorys"><div class="bgdel" title="Odebrat tento podklad">&times;</div>';
+    el.querySelector('.bgdel').onclick=()=>removeBackground(bg.id);
+    bgLayer.appendChild(el);
+  }
+  el.querySelector('.bgimg').src=bg.src;
+  el.style.left=bg.x+'px';el.style.top=bg.y+'px';el.style.width=bg.w+'px';el.style.height=bg.h+'px';
+}
+function removeBackground(id){
+  bgImages=bgImages.filter(b=>b.id!==id);
+  const el=document.getElementById('bgw'+id);if(el)el.remove();
+  let x=0;const gap=40;
+  bgImages.forEach(b=>{b.x=x;b.y=0;x+=b.w+gap;renderBackground(b);});
+  resizeStage();buildGrid();updateScaleBar();fitView();updateStatus();flash('Podklad odebran');
+}
+function addBackground(src){const img=new Image();img.onload=()=>{const w=img.naturalWidth,h=img.naturalHeight,gap=40;const x=bgImages.length?Math.max(...bgImages.map(b=>b.x+b.w))+gap:0;const bg={id:bgUid++,src,x,y:0,w,h};bgImages.push(bg);renderBackground(bg);resizeStage();buildGrid();updateScaleBar();fitView();updateStatus();flash(bgImages.length>1?'Dalsi pudorys pridan vedle puvodniho - zkontroluj meritko.':'Podklad nacten - klikni Kalibrovat a nastav meritko.');};img.onerror=()=>alert('Obrazek se nepodarilo nacist.');img.src=src;}
+
+/* ---------- Katalog UI ---------- */
+const catEl=document.getElementById('catalog');
+for(const [cat,list] of Object.entries(CATALOG)){
+  const c=document.createElement('div');c.className='cat';c.innerHTML='<div class="cat-h">'+cat+'</div>';
+  const wrap=document.createElement('div');wrap.className='cat-items';
+  for(const [name,w,h,color,type] of list){
+    const b=document.createElement('div');b.className='item';b.title=name+' ('+w+'x'+h+' cm)';
+    b.innerHTML='<span class="ic">'+furSVG(type,color)+'</span><span class="tx"><span class="n">'+name+'</span><span class="d">'+w+'x'+h+' cm</span></span>';
+    b.onclick=()=>addItem(name,w,h,color,type);
+    wrap.appendChild(b);
+  }
+  c.appendChild(wrap);catEl.appendChild(c);
+}
+
+/* ---------- Geometrie / kolize ---------- */
+function cmToPx(cm){return cm/100*pxPerM;}
+function corners(it){
+  const w=cmToPx(it.wcm),h=cmToPx(it.hcm),a=it.rot*Math.PI/180,co=Math.cos(a),si=Math.sin(a),hw=w/2,hh=h/2;
+  return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(p=>({x:it.x+p[0]*co-p[1]*si,y:it.y+p[0]*si+p[1]*co}));
+}
+function cornersInset(it,ins){const w=Math.max(2,cmToPx(it.wcm)-2*ins),h=Math.max(2,cmToPx(it.hcm)-2*ins),a=it.rot*Math.PI/180,co=Math.cos(a),si=Math.sin(a),hw=w/2,hh=h/2;return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(p=>({x:it.x+p[0]*co-p[1]*si,y:it.y+p[0]*si+p[1]*co}));}
+function overlapOBB(A,B){
+  for(const poly of [A,B]){
+    for(let i=0;i<poly.length;i++){
+      const p1=poly[i],p2=poly[(i+1)%poly.length],nx=-(p2.y-p1.y),ny=(p2.x-p1.x);
+      let minA=1e9,maxA=-1e9,minB=1e9,maxB=-1e9;
+      for(const p of A){const pr=p.x*nx+p.y*ny;if(pr<minA)minA=pr;if(pr>maxA)maxA=pr;}
+      for(const p of B){const pr=p.x*nx+p.y*ny;if(pr<minB)minB=pr;if(pr>maxB)maxB=pr;}
+      if(maxA<minB||maxB<minA)return false;
+    }
+  }
+  return true;
+}
+function normRect(it,x0,y0,x1,y1){const W=cmToPx(it.wcm),H=cmToPx(it.hcm),a=it.rot*Math.PI/180,co=Math.cos(a),si=Math.sin(a);return [[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(pt=>{const lx=(pt[0]/100)*W-W/2,ly=(pt[1]/100)*H-H/2;return {x:it.x+lx*co-ly*si,y:it.y+lx*si+ly*co};});}
+function footprint(it){if(it.type==='sofaL')return [normRect(it,3,3,97,55),normRect(it,55,55,97,97)];if(it.type==='counterL')return [normRect(it,2,2,98,60),normRect(it,60,60,98,98)];return [corners(it)];}
+function overlapDepth(A,B){let mn=Infinity;for(const poly of [A,B]){for(let i=0;i<poly.length;i++){const p1=poly[i],p2=poly[(i+1)%poly.length];let nx=-(p2.y-p1.y),ny=(p2.x-p1.x);const ln=Math.hypot(nx,ny)||1;nx/=ln;ny/=ln;let minA=1e9,maxA=-1e9,minB=1e9,maxB=-1e9;for(const q of A){const pr=q.x*nx+q.y*ny;if(pr<minA)minA=pr;if(pr>maxA)maxA=pr;}for(const q of B){const pr=q.x*nx+q.y*ny;if(pr<minB)minB=pr;if(pr>maxB)maxB=pr;}const ov=Math.min(maxA,maxB)-Math.max(minA,minB);if(ov<=0)return 0;if(ov<mn)mn=ov;}}return mn;}
+function itemsOverlap(a,b){const tol=cmToPx(6);const fa=footprint(a),fb=footprint(b);for(const pa of fa)for(const pb of fb)if(overlapDepth(pa,pb)>tol)return true;return false;}
+function updateCollisions(){
+  
+  const solids=items.filter(i=>i.type!=='door'&&i.type!=='gap');
+  const bad=new Set();
+  for(let i=0;i<solids.length;i++)for(let j=i+1;j<solids.length;j++){
+    if(itemsOverlap(solids[i],solids[j])){bad.add(solids[i].id);bad.add(solids[j].id);}
+  }
+  const blocked=new Set();
+  items.filter(i=>i.type==='gap').forEach(g=>{for(const s of solids){if(itemsOverlap(g,s)){blocked.add(g.id);break;}}});
+  items.forEach(i=>{const el=document.getElementById('fur'+i.id);if(!el)return;
+    el.classList.toggle('collide',bad.has(i.id));el.classList.toggle('blocked',blocked.has(i.id));});
+  const n=bad.size,nb=blocked.size;
+  document.getElementById('stWarn').textContent=(n||nb)?('Pozor: '+(n?n+' prekryv ':'')+(nb?nb+' zablokovany prochod':'')):'';
+  document.getElementById('stWarn').style.color=(n||nb)?'#e5544b':'var(--muted)';
+}
+
+/* ---------- Pridani / vykresleni ---------- */
+function addItem(name,wcm,hcm,color,type){
+  const cx=(viewport.scrollLeft+viewport.clientWidth/2)/zoom,cy=(viewport.scrollTop+viewport.clientHeight/2)/zoom;
+  const it={id:uid++,name,wcm,hcm,x:cx,y:cy,rot:0,color,type,orig:{name,wcm,hcm,color}};
+  items.push(it);renderItem(it);select(it.id);updateStatus();updateCollisions();
+}
+function renderItem(it){
+  let el=document.getElementById('fur'+it.id);
+  if(!el){
+    el=document.createElement('div');el.className='fur';el.id='fur'+it.id;
+    el.innerHTML='<div class="iconwrap"></div><div class="stem"></div><div class="handle"></div><div class="del">&times;</div><div class="lbl"></div><div class="lockb">&#128274;</div>';
+    stage.appendChild(el);
+    el.addEventListener('pointerdown',e=>startMove(e,it));
+    el.addEventListener('contextmenu',e=>{e.preventDefault();openEditor(it,e.clientX,e.clientY);});
+    el.querySelector('.handle').addEventListener('pointerdown',e=>startRotate(e,it));
+    el.querySelector('.del').addEventListener('pointerdown',e=>e.stopPropagation());
+    el.querySelector('.del').addEventListener('click',e=>{e.stopPropagation();removeItem(it.id);});
+    RH.forEach(rr=>{const hd=document.createElement('div');hd.className='rh rh-'+rr[0];hd.addEventListener('pointerdown',ev=>startResize(ev,it,rr[3],rr[4]));el.appendChild(hd);});
+  }
+  const w=cmToPx(it.wcm),h=cmToPx(it.hcm);
+  el.style.width=w+'px';el.style.height=h+'px';el.style.left=(it.x-w/2)+'px';el.style.top=(it.y-h/2)+'px';
+  el.style.transform='rotate('+it.rot+'deg)';el.title=it.name+' ('+it.wcm+'x'+it.hcm+' cm)';
+  el.querySelector('.iconwrap').innerHTML=furSVG(it.type,it.color);
+  const lbl=el.querySelector('.lbl');
+  if(it.type==='gap'){lbl.style.display='block';lbl.textContent=Math.min(it.wcm,it.hcm)+' cm';}
+  else lbl.style.display='none';
+  el.classList.toggle('sel',it.id===selId);el.classList.toggle('locked',!!it.locked);el.classList.toggle('free',!!it.free);el.querySelectorAll('.rh').forEach((hd,i)=>{hd.style.left=(RH[i][1]*w)+'px';hd.style.top=(RH[i][2]*h)+'px';});
+}
+function renderAll(){items.forEach(renderItem);updateCollisions();}
+function removeItem(id){
+  const el=document.getElementById('fur'+id);if(el)el.remove();
+  items=items.filter(i=>i.id!==id);if(selId===id)selId=null;if(edId===id)closeEditor();
+  updateStatus();updateCollisions();
+}
+function select(id){
+  selId=id;document.querySelectorAll('.fur').forEach(e=>e.classList.remove('sel'));
+  const el=document.getElementById('fur'+id);if(el){el.classList.add('sel');el.parentNode.appendChild(el);}
+  updateStatus();
+}
+
+/* ---------- Presun + prichytavani ---------- */
+function toStage(e){const r=stage.getBoundingClientRect();return {x:(e.clientX-r.left)/zoom,y:(e.clientY-r.top)/zoom};}
+function aabb(it){const c=corners(it);return {minx:Math.min(...c.map(p=>p.x)),maxx:Math.max(...c.map(p=>p.x)),miny:Math.min(...c.map(p=>p.y)),maxy:Math.max(...c.map(p=>p.y))};}
+function applySnap(it){
+  const thr=14,g=cmToPx(SNAP_CM);
+  const a=aabb(it);let dx=0,bx=thr,dy=0,by=thr;
+  for(const o of items){ if(o.id===it.id||o.type==='gap'||o.type==='door')continue;
+    const b=aabb(o);
+    [[a.minx,b.minx],[a.minx,b.maxx],[a.maxx,b.minx],[a.maxx,b.maxx]].forEach(([p,q])=>{const dd=q-p;if(Math.abs(dd)<bx){bx=Math.abs(dd);dx=dd;}});
+    [[a.miny,b.miny],[a.miny,b.maxy],[a.maxy,b.miny],[a.maxy,b.maxy]].forEach(([p,q])=>{const dd=q-p;if(Math.abs(dd)<by){by=Math.abs(dd);dy=dd;}});
+  }
+  if(dx!==0)it.x+=dx; else it.x=Math.round(it.x/g)*g;
+  if(dy!==0)it.y+=dy; else it.y=Math.round(it.y/g)*g;
+}
+function startMove(e,it){
+  if(e.button!==0)return;
+  if(e.target.classList.contains('handle')||e.target.classList.contains('del'))return;
+  if(it.locked){select(it.id);return;}
+  e.preventDefault();select(it.id);
+  const p=toStage(e),ox=p.x-it.x,oy=p.y-it.y,el=document.getElementById('fur'+it.id);
+  el.style.cursor='grabbing';el.setPointerCapture(e.pointerId);
+  function mv(ev){const q=toStage(ev);it.x=q.x-ox;it.y=q.y-oy;if(snap)applySnap(it);renderItem(it);updateStatus();updateCollisions();}
+  function up(){el.releasePointerCapture(e.pointerId);el.style.cursor='grab';el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);}
+  el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);
+}
+function startRotate(e,it){if(it.locked)return;
+  e.preventDefault();e.stopPropagation();select(it.id);
+  const el=document.getElementById('fur'+it.id),handle=el.querySelector('.handle');handle.setPointerCapture(e.pointerId);
+  function mv(ev){const p=toStage(ev);let ang=Math.atan2(p.y-it.y,p.x-it.x)*180/Math.PI+90;if(ev.shiftKey)ang=Math.round(ang/15)*15;it.rot=Math.round(ang);renderItem(it);updateStatus();updateCollisions();}
+  function up(){handle.releasePointerCapture(e.pointerId);handle.removeEventListener('pointermove',mv);handle.removeEventListener('pointerup',up);}
+  handle.addEventListener('pointermove',mv);handle.addEventListener('pointerup',up);
+}
+function rotate90(it){it.rot=(it.rot+90)%360;renderItem(it);updateStatus();updateCollisions();}
+function startResize(e,it,ux,uy){
+  if(it.locked)return;e.preventDefault();e.stopPropagation();select(it.id);
+  const a=it.rot*Math.PI/180,co=Math.cos(a),si=Math.sin(a),w0=cmToPx(it.wcm),h0=cmToPx(it.hcm);
+  const A={x:it.x+((-ux*w0/2)*co-(-uy*h0/2)*si),y:it.y+((-ux*w0/2)*si+(-uy*h0/2)*co)};
+  const tg=e.target;tg.setPointerCapture(e.pointerId);
+  function mv(ev){
+    const P=toStage(ev),dx=P.x-A.x,dy=P.y-A.y,Lx=dx*co+dy*si,Ly=-dx*si+dy*co,mn=cmToPx(5);
+    let nw=w0,nh=h0;if(ux!==0)nw=Math.max(mn,Lx*ux);if(uy!==0)nh=Math.max(mn,Ly*uy);
+    it.wcm=Math.max(5,Math.round(nw/pxPerM*100));it.hcm=Math.max(5,Math.round(nh/pxPerM*100));
+    const rw=cmToPx(it.wcm),rh2=cmToPx(it.hcm);
+    it.x=A.x+((ux*rw/2)*co-(uy*rh2/2)*si);it.y=A.y+((ux*rw/2)*si+(uy*rh2/2)*co);
+    renderItem(it);updateStatus();updateCollisions();
+    if(edId===it.id){edW.value=it.wcm;edH.value=it.hcm;}
+  }
+  function up(){tg.releasePointerCapture(e.pointerId);tg.removeEventListener('pointermove',mv);tg.removeEventListener('pointerup',up);}
+  tg.addEventListener('pointermove',mv);tg.addEventListener('pointerup',up);
+}
+
+/* ---------- Editor ---------- */
+const editor=document.getElementById('editor');let edId=null;
+const edName=document.getElementById('edName'),edW=document.getElementById('edW'),edH=document.getElementById('edH'),
+  edColor=document.getElementById('edColor'),edTitle=document.getElementById('edTitle'),edSw=document.getElementById('edSwatches');
+PALETTE.forEach(c=>{const s=document.createElement('div');s.className='sw';s.style.background=c;s.title=c;
+  s.onclick=()=>{const it=edItem();if(it){it.color=c;edColor.value=c;renderItem(it);}};edSw.appendChild(s);});
+function edItem(){return items.find(i=>i.id===edId);}
+function openEditor(it,cx,cy){
+  edId=it.id;select(it.id);edName.value=it.name;edW.value=it.wcm;edH.value=it.hcm;edColor.value=toHex(it.color);edTitle.textContent=it.name;document.getElementById('edLock').textContent=it.locked?'Odemknout':'Zamknout';var _f=document.getElementById('edFree');_f.textContent=it.free?'Volne: zap':'Volne';_f.classList.toggle('active',!!it.free);
+  document.getElementById('edBuyList').style.display='none';
+  document.getElementById('edBuy').style.display=NO_BUY_TYPES.includes(it.type)?'none':'';
+  editor.style.display='flex';editor.style.maxHeight='';const r=editor.getBoundingClientRect();let x=cx+8,y=cy+8;
+  if(x+r.width>window.innerWidth-8)x=window.innerWidth-r.width-8;
+  if(y+r.height>window.innerHeight-8)y=window.innerHeight-r.height-8;
+  x=Math.max(8,x);y=Math.max(8,y);
+  editor.style.left=x+'px';editor.style.top=y+'px';
+  editor.style.maxHeight=(window.innerHeight-y-8)+'px';
+}
+function closeEditor(){editor.style.display='none';edId=null;document.getElementById('edBuyList').style.display='none';}
+document.getElementById('edBuy').onclick=()=>{
+  const it=edItem();if(!it)return;
+  const list=document.getElementById('edBuyList');
+  if(list.style.display==='flex'){list.style.display='none';return;}
+  const partners=partnersFor(it.type);
+  list.innerHTML='<span class="hint">Affiliate odkazy - pri nakupu muzeme ziskat provizi.</span>'+
+    partners.map(p=>'<a href="'+p.url+'" target="_blank" rel="noopener">'+p.name+'</a>').join('');
+  list.style.display='flex';
+};
+function toHex(c){if(/^#/.test(c))return c.length===4?('#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3]):c;return '#cccccc';}
+edName.oninput=()=>{const it=edItem();if(it){it.name=edName.value;edTitle.textContent=it.name;renderItem(it);updateStatus();}};
+edW.oninput=()=>{const it=edItem();const v=parseInt(edW.value);if(it&&v>0){it.wcm=v;renderItem(it);updateStatus();updateCollisions();}};
+edH.oninput=()=>{const it=edItem();const v=parseInt(edH.value);if(it&&v>0){it.hcm=v;renderItem(it);updateStatus();updateCollisions();}};
+edColor.oninput=()=>{const it=edItem();if(it){it.color=edColor.value;renderItem(it);}};
+document.getElementById('edRot').onclick=()=>{const it=edItem();if(it)rotate90(it);};
+document.getElementById('edReset').onclick=()=>{const it=edItem();if(it){if(it.orig){it.name=it.orig.name;it.wcm=it.orig.wcm;it.hcm=it.orig.hcm;it.color=it.orig.color;}it.rot=0;it.free=false;it.locked=false;edName.value=it.name;edW.value=it.wcm;edH.value=it.hcm;edColor.value=toHex(it.color);edTitle.textContent=it.name;document.getElementById('edLock').textContent='Zamknout';var b=document.getElementById('edFree');b.textContent='Volne';b.classList.remove('active');renderItem(it);updateStatus();updateCollisions();}};
+document.getElementById('edLock').onclick=()=>{const it=edItem();if(it){it.locked=!it.locked;document.getElementById('edLock').textContent=it.locked?'Odemknout':'Zamknout';var _f=document.getElementById('edFree');_f.textContent=it.free?'Volne: zap':'Volne';_f.classList.toggle('active',!!it.free);renderItem(it);updateStatus();}};
+document.getElementById('edFree').onclick=()=>{const it=edItem();if(it){it.free=!it.free;const b=document.getElementById('edFree');b.textContent=it.free?'Volne: zap':'Volne';b.classList.toggle('active',it.free);renderItem(it);}};
+document.getElementById('edDup').onclick=()=>{const it=edItem();if(it)duplicate(it);};
+document.getElementById('edDel').onclick=()=>{const it=edItem();if(it)removeItem(it.id);};
+document.getElementById('edX').onclick=closeEditor;
+function duplicate(it){const c=Object.assign({},it,{id:uid++,x:it.x+cmToPx(25),y:it.y+cmToPx(25)});items.push(c);renderItem(c);select(c.id);updateStatus();updateCollisions();}
+
+/* ---------- Klik/tazeni do prazdna = posun plochy ---------- */
+let measuring=false;
+stage.addEventListener('pointerdown',e=>{
+  if(e.button!==0||measuring)return;
+  if(e.target===stage||e.target===bgLayer||e.target===gridLayer){select(null);closeEditor();startPan(e);}
+});
+function startPan(e){
+  const sx=viewport.scrollLeft,sy=viewport.scrollTop,px=e.clientX,py=e.clientY;viewport.style.cursor='grabbing';
+  function mv(ev){viewport.scrollLeft=sx-(ev.clientX-px);viewport.scrollTop=sy-(ev.clientY-py);}
+  function up(){viewport.style.cursor='';window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);}
+  window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);
+}
+
+/* ---------- Zoom ---------- */
+function applyZoom(){stageWrap.style.transform='scale('+zoom+')';stageWrap.style.width=(IMG_W*zoom)+'px';stageWrap.style.height=(IMG_H*zoom)+'px';document.getElementById('zoomLabel').textContent=Math.round(zoom*100)+'%';}
+function setZoom(z,cx,cy){z=Math.min(4,Math.max(0.2,z));const rect=viewport.getBoundingClientRect();if(cx==null)cx=rect.width/2;if(cy==null)cy=rect.height/2;const sx=(viewport.scrollLeft+cx)/zoom,sy=(viewport.scrollTop+cy)/zoom;zoom=z;applyZoom();viewport.scrollLeft=sx*zoom-cx;viewport.scrollTop=sy*zoom-cy;}
+document.getElementById('zoomIn').onclick=()=>setZoom(zoom*1.2);
+document.getElementById('zoomOut').onclick=()=>setZoom(zoom/1.2);
+document.getElementById('zoomFit').onclick=fitView;
+function fitView(){const pad=40,z=Math.min((viewport.clientWidth-pad)/IMG_W,(viewport.clientHeight-pad)/IMG_H);zoom=Math.min(4,Math.max(0.2,z));applyZoom();viewport.scrollLeft=(IMG_W*zoom-viewport.clientWidth)/2;viewport.scrollTop=(IMG_H*zoom-viewport.clientHeight)/2;}
+viewport.addEventListener('wheel',e=>{e.preventDefault();const r=viewport.getBoundingClientRect();setZoom(zoom*(e.deltaY<0?1.1:1/1.1),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+
+/* ---------- Mrizka ---------- */
+function updateScaleBar(){var sb=document.getElementById('scaleBar');if(!sb)return;var ref=1,px=pxPerM*ref;while(px<40&&ref<200){ref*=2;px=pxPerM*ref;}while(px>240){ref/=2;px=pxPerM*ref;}var lbl=ref>=1?(ref+' m'):(Math.round(ref*100)+' cm');sb.style.left='14px';sb.style.top=(IMG_H-42)+'px';sb.innerHTML='<div style="height:8px;width:'+px+'px;border:2px solid #111;border-top:none;background:rgba(255,255,255,.45)"></div><div style="font-size:11px;font-weight:700;color:#111;background:rgba(255,255,255,.85);display:inline-block;padding:0 4px;border-radius:3px;margin-top:2px">'+lbl+'</div>';}
+function buildGrid(){
+  if(!gridOn){gridLayer.innerHTML='';return;}
+  const step=pxPerM*0.5;let l='';
+  for(let x=0;x<=IMG_W+0.5;x+=step)l+='<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+IMG_H+'"/>';
+  for(let y=0;y<=IMG_H+0.5;y+=step)l+='<line x1="0" y1="'+y+'" x2="'+IMG_W+'" y2="'+y+'"/>';
+  gridLayer.innerHTML='<svg width="'+IMG_W+'" height="'+IMG_H+'" style="position:absolute;inset:0"><g stroke="rgba(80,150,230,.35)" stroke-width="1">'+l+'</g></svg>';
+}
+document.getElementById('gridBtn').onclick=function(){gridOn=!gridOn;this.textContent='Mrizka: '+(gridOn?'zap':'vyp');this.classList.toggle('active',gridOn);buildGrid();};
+
+/* ---------- Toolbar ---------- */
+document.getElementById('rotBtn').onclick=()=>{const it=cur();if(it)rotate90(it);};
+document.getElementById('delBtn').onclick=()=>{if(selId!=null)removeItem(selId);};
+document.getElementById('snapBtn').onclick=function(){snap=!snap;this.textContent='Prichyt: '+(snap?'zap':'vyp');this.classList.toggle('active',snap);};
+document.getElementById('clearBtn').onclick=()=>{if(confirm('Smazat cele rozvrzeni?')){items.forEach(i=>{const e=document.getElementById('fur'+i.id);if(e)e.remove();});items=[];selId=null;closeEditor();updateStatus();updateCollisions();}};
+function cur(){return items.find(i=>i.id===selId);}
+
+/* ---------- Klavesy ---------- */
+window.addEventListener('keydown',e=>{
+  if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)){if(e.key==='Escape')document.activeElement.blur();return;}
+  if(e.key==='Escape'){closeEditor();cancelMeasure();return;}
+  const it=cur();
+  if((e.key==='Delete'||e.key==='Backspace')&&selId!=null){e.preventDefault();removeItem(selId);}
+  else if((e.key==='r'||e.key==='R')&&it){rotate90(it);}
+  else if(it&&!it.locked&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+    e.preventDefault();const dd=cmToPx(e.shiftKey?10:1);
+    if(e.key==='ArrowUp')it.y-=dd;if(e.key==='ArrowDown')it.y+=dd;if(e.key==='ArrowLeft')it.x-=dd;if(e.key==='ArrowRight')it.x+=dd;
+    renderItem(it);updateStatus();updateCollisions();
+  }
+});
+
+/* ---------- Pravitko (mereni + vyhodnoceni prochodu) ---------- */
+let mPts=[],mPrev=null;
+document.getElementById('measBtn').onclick=function(){measuring?cancelMeasure():startMeasure();};
+function startMeasure(){measuring=true;clearMeasure();measureLayer.classList.add('measuring');document.getElementById('measBtn').classList.add('active');mPts=[];showBanner('Klikni 2 body pro zmereni. Zelena = projde (>=80 cm), oranzova 60-80, cervena <60. Esc = konec.');}
+function cancelMeasure(){measuring=false;measureLayer.classList.remove('measuring');document.getElementById('measBtn').classList.remove('active');if(mPrev){mPrev.remove();mPrev=null;}hideBanner();}
+function clearMeasure(){measureLayer.querySelectorAll('.mDot,.mLine,.mLabel').forEach(e=>e.remove());mPrev=null;}
+measureLayer.addEventListener('click',e=>{
+  if(!measuring)return;const p=toStage(e);mPts.push(p);
+  const dot=document.createElement('div');dot.className='mDot';dot.style.left=p.x+'px';dot.style.top=p.y+'px';measureLayer.appendChild(dot);
+  if(mPts.length===2){drawMeasure(mPts[0],mPts[1]);measuring=false;measureLayer.classList.remove('measuring');document.getElementById('measBtn').classList.remove('active');hideBanner();if(mPrev){mPrev.remove();mPrev=null;}}
+});
+measureLayer.addEventListener('pointermove',e=>{
+  if(!measuring||mPts.length!==1)return;const p=toStage(e);if(mPrev)mPrev.remove();
+  mPrev=mkLine(mPts[0],p,'rgba(120,180,255,.6)');measureLayer.appendChild(mPrev);
+});
+function mkLine(a,b,col){const d=document.createElement('div');d.className='mLine';const len=Math.hypot(b.x-a.x,b.y-a.y);d.style.left=a.x+'px';d.style.top=a.y+'px';d.style.width=len+'px';d.style.transform='rotate('+Math.atan2(b.y-a.y,b.x-a.x)+'rad)';if(col)d.style.background=col;return d;}
+function drawMeasure(a,b){
+  measureLayer.appendChild(mkLine(a,b));
+  const dpx=Math.hypot(b.x-a.x,b.y-a.y),cm=Math.round(dpx/pxPerM*100),m=(cm/100).toFixed(2);
+  const lab=document.createElement('div');lab.className='mLabel';lab.style.left=((a.x+b.x)/2)+'px';lab.style.top=((a.y+b.y)/2)+'px';
+  lab.textContent=m+' m ('+cm+' cm)';
+  lab.style.background=cm>=80?'rgba(40,150,80,.92)':cm>=60?'rgba(200,140,30,.92)':'rgba(200,60,55,.92)';
+  measureLayer.appendChild(lab);
+}
+
+/* ---------- Kalibrace ---------- */
+const calibLayer=document.getElementById('calibLayer'),calibLine=document.getElementById('calibLine');let calibPts=[],calibDpx=0;
+document.getElementById('calibBtn').onclick=()=>{calibPts=[];calibLayer.style.display='block';calibLine.style.display='none';showBanner('Klikni na 2 body podel <b>zname</b> vzdalenosti (napr. delsi steny).');calibLayer.querySelectorAll('.calibDot').forEach(d=>d.remove());};
+calibLayer.addEventListener('click',e=>{
+  const p=toStage(e);calibPts.push(p);const dot=document.createElement('div');dot.className='calibDot';dot.style.left=p.x+'px';dot.style.top=p.y+'px';calibLayer.appendChild(dot);
+  if(calibPts.length===2){
+    const a=calibPts[0],b=calibPts[1],dpx=Math.hypot(b.x-a.x,b.y-a.y);
+    calibLine.style.display='block';calibLine.style.left=a.x+'px';calibLine.style.top=a.y+'px';calibLine.style.width=dpx+'px';calibLine.style.transform='rotate('+Math.atan2(b.y-a.y,b.x-a.x)+'rad)';
+    calibDpx=dpx;calibLayer.style.display='none';hideBanner();openCalibBox();
+  }
+});
+calibLayer.addEventListener('pointermove',e=>{
+  if(calibPts.length!==1)return;
+  const a=calibPts[0],p=toStage(e),dpx=Math.hypot(p.x-a.x,p.y-a.y);
+  calibLine.style.display='block';calibLine.style.left=a.x+'px';calibLine.style.top=a.y+'px';calibLine.style.width=dpx+'px';calibLine.style.transform='rotate('+Math.atan2(p.y-a.y,p.x-a.x)+'rad)';
+});
+function showBanner(h){banner.innerHTML=h;banner.style.display='block';}
+function hideBanner(){banner.style.display='none';}
+function openCalibBox(){const cb=document.getElementById('calibBox');cb.style.display='block';const v=document.getElementById('cbVal');v.focus();v.select();}
+function closeCalibBox(){document.getElementById('calibBox').style.display='none';calibLayer.querySelectorAll('.calibDot').forEach(d=>d.remove());calibLine.style.display='none';}
+document.getElementById('cbOk').onclick=()=>{let v=parseFloat((document.getElementById('cbVal').value||'').replace(',','.'));const u=document.getElementById('cbUnit').value;if(v>0){const meters=u==='cm'?v/100:v;pxPerM=calibDpx/meters;renderAll();buildGrid();updateScaleBar();updateStatus();flash('Meritko: 1 m = '+pxPerM.toFixed(1)+' px');}closeCalibBox();};
+document.getElementById('cbCancel').onclick=closeCalibBox;
+document.getElementById('cbVal').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('cbOk').click();}if(e.key==='Escape')closeCalibBox();});
+
+/* ---------- Ulozit / nacist ---------- */
+document.getElementById('saveBtn').onclick=()=>{localStorage.setItem('bytPlan',JSON.stringify({pxPerM,items,uid,bgImages,bgUid}));flash('Ulozeno');};
+document.getElementById('loadBtn').onclick=()=>{const raw=localStorage.getItem('bytPlan');if(!raw){flash('Nic ulozeneho');return;}const d=JSON.parse(raw);pxPerM=d.pxPerM||pxPerM;items=d.items||[];uid=d.uid||1;items.forEach(i=>{if(!i.orig)i.orig={name:i.name,wcm:i.wcm,hcm:i.hcm,color:i.color};});bgLayer.innerHTML='';bgImages=d.bgImages||[];bgUid=d.bgUid||1;bgImages.forEach(renderBackground);resizeStage();document.querySelectorAll('.fur').forEach(e=>e.remove());renderAll();buildGrid();updateScaleBar();updateStatus();flash('Nacteno');};
+function flash(t){showBanner(t);setTimeout(hideBanner,1300);}
+
+/* ---------- Export PNG / Tisk ---------- */
+function buildExportSVG(){
+  let parts=bgImages.map(bg=>'<image xlink:href="'+bg.src+'" x="'+bg.x+'" y="'+bg.y+'" width="'+bg.w+'" height="'+bg.h+'"/>').join('');
+  for(const it of items){
+    const w=cmToPx(it.wcm),h=cmToPx(it.hcm),left=it.x-w/2,top=it.y-h/2;
+    parts+='<g transform="rotate('+it.rot+' '+it.x+' '+it.y+')"><svg x="'+left+'" y="'+top+'" width="'+w+'" height="'+h+'" viewBox="3 3 94 94" preserveAspectRatio="none">'+furShapes(it.type,it.color)+'</svg></g>';
+  }
+  return '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+IMG_W+'" height="'+IMG_H+'" viewBox="0 0 '+IMG_W+' '+IMG_H+'">'+parts+'</svg>';
+}
+function exportPNG(cb){
+  const svg=buildExportSVG(),url='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg),img=new Image();
+  img.onload=()=>{const sc=2,cv=document.createElement('canvas');cv.width=IMG_W*sc;cv.height=IMG_H*sc;const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);ctx.scale(sc,sc);ctx.drawImage(img,0,0);try{cb(cv.toDataURL('image/png'));}catch(err){alert('Export selhal: '+err);}};
+  img.onerror=()=>alert('Export selhal (nepodarilo se vykreslit obrazek).');
+  img.src=url;
+}
+document.getElementById('exportBtn').onclick=()=>exportPNG(d=>{const a=document.createElement('a');a.href=d;a.download='pudorys-navrh.png';a.click();});
+document.getElementById('printBtn').onclick=()=>exportPNG(d=>{const w=window.open('');if(!w){alert('Povol vyskakovaci okna pro tisk.');return;}w.document.write('<html><head><title>Tisk pudorysu</title></head><body style="margin:0;text-align:center"><img src="'+d+'" style="max-width:100%" onload="setTimeout(function(){window.print()},200)"></body></html>');w.document.close();});
+
+/* ---------- Status ---------- */
+function updateStatus(){
+  document.getElementById('stCount').textContent='Nabytek: '+items.length;
+  const it=cur();
+  document.getElementById('stSel').textContent='Vybrano: '+(it?(it.name+' - '+it.wcm+'x'+it.hcm+' cm - '+it.rot+' st.'):'-');
+  document.getElementById('stScale').textContent='Meritko: 1 m = '+pxPerM.toFixed(1)+' px';
+  document.getElementById('scaleHint').textContent='1 m = '+pxPerM.toFixed(0)+' px';
+}
+
+/* ---------- Start ---------- */
+fitView();updateScaleBar();updateStatus();
+
+/* ---------- Varovani pred odchodem ze stranky ---------- */
+window.addEventListener('beforeunload',e=>{
+  if(items.length||bgImages.length){e.preventDefault();e.returnValue='';}
+});
+</script>
+</body>
+</html>
