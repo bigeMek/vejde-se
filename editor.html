@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Planovac nabytku - pudorys bytu</title>
 <style>
   :root{
@@ -122,18 +122,55 @@
   #calibBox #cbUnit{flex:0 0 64px;width:64px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:8px 4px;font-size:14px;}
   #calibBox .cb-actions{display:flex;gap:8px;justify-content:flex-end;}
   #calibBox #cbOk{background:var(--accent2);border-color:var(--accent2);color:#fff;}
+
+  /* ===== Dotykove ovladani a mobil / tablet ===== */
+  #drawerBg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;}
+  #drawerBg.show{display:block;}
+  #catToggle{display:none;}
+
+  /* Vetsi uchyty a plochy pro prsty (dotykova zarizeni) */
+  @media (pointer:coarse){
+    #viewport{touch-action:none;}
+    #calibLayer,#measureLayer.measuring{touch-action:none;}
+    .btn{padding:9px 13px;font-size:13.5px;}
+    .item{padding:9px 8px;}
+    .fur{-webkit-touch-callout:none;}
+    .fur .handle{width:22px;height:22px;top:-42px;}
+    .fur .stem{height:40px;top:-40px;}
+    .fur .del{width:30px;height:30px;font-size:18px;line-height:26px;top:-15px;right:-15px;}
+    .fur .rh{width:20px;height:20px;}
+    .bgwrap .bgdel{width:30px;height:30px;font-size:18px;line-height:24px;}
+  }
+
+  /* Uzka obrazovka: sidebar jako vysouvaci zasuvka, toolbar scrollovaci, editor jako spodni panel */
+  @media (max-width:820px){
+    #app{height:100dvh;}
+    #catToggle{display:inline-block;}
+    #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:50;width:min(86vw,320px);
+             transform:translateX(-100%);transition:transform .22s ease;box-shadow:0 0 30px rgba(0,0,0,.6);}
+    #sidebar.open{transform:none;}
+    #toolbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    #toolbar .btn,#toolbar .zoomlabel,#toolbar .sep{flex:0 0 auto;}
+    #toolbar .spacer,#toolbar .hint{display:none;}
+    #editor{left:0!important;right:0;top:auto!important;bottom:0;width:100%!important;
+            max-height:76vh!important;border-radius:14px 14px 0 0;}
+    #editor .ed-actions .btn{padding:10px 4px;}
+    #status{gap:10px;font-size:11px;}
+    #calibBox{width:min(340px,92vw);}
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <aside id="sidebar">
     <h1><a href="index.html" title="Zpet na hlavni stranku" style="color:inherit;text-decoration:none">&#8592; Planovac bytu</a></h1>
-    <div class="sub">Klik = pridat na plan. Leve tlacitko: tahnout nabytek nebo tahnout plochu = posun. Zluty puntik = otoceni. <b>Prave tlacitko</b> = rozmery a barva. Delete = smazat. Kolecko = zoom. Cerveny ram = prekryv.</div>
+    <div class="sub">Klik = pridat na plan. Leve tlacitko: tahnout nabytek nebo tahnout plochu = posun. Zluty puntik = otoceni. <b>Prave tlacitko</b> = rozmery a barva. Delete = smazat. Kolecko = zoom. Cerveny ram = prekryv.<br><b>Na dotyku:</b> podrz prst na nabytku = rozmery a barva, dva prsty = zoom a posun plochy.</div>
     <div id="catalog"></div>
   </aside>
 
   <div id="main">
     <div id="toolbar">
+      <button class="btn" id="catToggle" title="Zobrazit katalog nabytku">&#9776; Katalog</button>
       <button class="btn" id="zoomOut">-</button>
       <span class="zoomlabel" id="zoomLabel">100%</span>
       <button class="btn" id="zoomIn">+</button>
@@ -143,7 +180,6 @@
       <button class="btn danger" id="delBtn" title="Smazat vybrany (Delete)">Smazat</button>
       <div class="sep"></div>
       <button class="btn" id="gridBtn" title="Zobrazit mrizku (0,5 m)">Mrizka: vyp</button>
-      <button class="btn" id="snapBtn" title="Prichytavani k hranam nabytku a mrizce">Prichyt: vyp</button>
       <button class="btn" id="measBtn" title="Zmerit vzdalenost / prochod">Pravitko</button>
       <button class="btn" id="bgBtn" title="Nahrat vlastni pudorys (PNG/JPG/WEBP). Da se nahrat i vice pudorysu vedle sebe.">Vybrat podklad</button>
       <input type="file" id="bgInput" accept="image/png,image/jpeg,image/webp,image/*" style="display:none">
@@ -178,6 +214,8 @@
     </div>
   </div>
 </div>
+
+<div id="drawerBg"></div>
 
 <div id="editor">
   <div class="ed-head"><span id="edTitle">Nabytek</span><span id="edX">&times;</span></div>
@@ -339,9 +377,9 @@ function furSVG(type,color){return '<svg class="ficon" viewBox="3 3 94 94" prese
 
 /* ---------- Stav ---------- */
 let IMG_W=900,IMG_H=650;
-let pxPerM=63,zoom=1,items=[],selId=null,snap=false,gridOn=false;
+let pxPerM=63,zoom=1,items=[],selId=null,gridOn=false;
 let bgImages=[],bgUid=1;
-const SNAP_CM=5;let uid=1;
+let uid=1;
 
 const stageWrap=document.getElementById('stageWrap'),stage=document.getElementById('stage'),
   bgLayer=document.getElementById('bgLayer'),viewport=document.getElementById('viewport'),
@@ -383,7 +421,7 @@ for(const [cat,list] of Object.entries(CATALOG)){
   for(const [name,w,h,color,type] of list){
     const b=document.createElement('div');b.className='item';b.title=name+' ('+w+'x'+h+' cm)';
     b.innerHTML='<span class="ic">'+furSVG(type,color)+'</span><span class="tx"><span class="n">'+name+'</span><span class="d">'+w+'x'+h+' cm</span></span>';
-    b.onclick=()=>addItem(name,w,h,color,type);
+    b.onclick=()=>{addItem(name,w,h,color,type);if(isMobile())closeDrawer();};
     wrap.appendChild(b);
   }
   c.appendChild(wrap);catEl.appendChild(c);
@@ -470,28 +508,23 @@ function select(id){
 
 /* ---------- Presun + prichytavani ---------- */
 function toStage(e){const r=stage.getBoundingClientRect();return {x:(e.clientX-r.left)/zoom,y:(e.clientY-r.top)/zoom};}
-function aabb(it){const c=corners(it);return {minx:Math.min(...c.map(p=>p.x)),maxx:Math.max(...c.map(p=>p.x)),miny:Math.min(...c.map(p=>p.y)),maxy:Math.max(...c.map(p=>p.y))};}
-function applySnap(it){
-  const thr=14,g=cmToPx(SNAP_CM);
-  const a=aabb(it);let dx=0,bx=thr,dy=0,by=thr;
-  for(const o of items){ if(o.id===it.id||o.type==='gap'||o.type==='door')continue;
-    const b=aabb(o);
-    [[a.minx,b.minx],[a.minx,b.maxx],[a.maxx,b.minx],[a.maxx,b.maxx]].forEach(([p,q])=>{const dd=q-p;if(Math.abs(dd)<bx){bx=Math.abs(dd);dx=dd;}});
-    [[a.miny,b.miny],[a.miny,b.maxy],[a.maxy,b.miny],[a.maxy,b.maxy]].forEach(([p,q])=>{const dd=q-p;if(Math.abs(dd)<by){by=Math.abs(dd);dy=dd;}});
-  }
-  if(dx!==0)it.x+=dx; else it.x=Math.round(it.x/g)*g;
-  if(dy!==0)it.y+=dy; else it.y=Math.round(it.y/g)*g;
-}
 function startMove(e,it){
   if(e.button!==0)return;
+  if(activePointers.size>1)return;                 // druhy prst = gesto (pinch/posun), netahni nabytek
   if(e.target.classList.contains('handle')||e.target.classList.contains('del'))return;
   if(it.locked){select(it.id);return;}
   e.preventDefault();select(it.id);
   const p=toStage(e),ox=p.x-it.x,oy=p.y-it.y,el=document.getElementById('fur'+it.id);
   el.style.cursor='grabbing';el.setPointerCapture(e.pointerId);
-  function mv(ev){const q=toStage(ev);it.x=q.x-ox;it.y=q.y-oy;if(snap)applySnap(it);renderItem(it);updateStatus();updateCollisions();}
-  function up(){el.releasePointerCapture(e.pointerId);el.style.cursor='grab';el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);}
-  el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);
+  const sx=e.clientX,sy=e.clientY;let moved=false,lp=null;
+  if(e.pointerType==='touch')lp=setTimeout(()=>{lp=null;if(!moved){up();openEditor(it,sx,sy);}},500); // dlouhy stisk = editor
+  function mv(ev){
+    if(activePointers.size>1){up();return;}
+    if(!moved&&Math.hypot(ev.clientX-sx,ev.clientY-sy)>6){moved=true;if(lp){clearTimeout(lp);lp=null;}}
+    const q=toStage(ev);it.x=q.x-ox;it.y=q.y-oy;renderItem(it);updateStatus();updateCollisions();
+  }
+  function up(){if(lp){clearTimeout(lp);lp=null;}try{el.releasePointerCapture(e.pointerId);}catch(_){}el.style.cursor='grab';el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);}
+  el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
 }
 function startRotate(e,it){if(it.locked)return;
   e.preventDefault();e.stopPropagation();select(it.id);
@@ -530,7 +563,9 @@ function openEditor(it,cx,cy){
   edId=it.id;select(it.id);edName.value=it.name;edW.value=it.wcm;edH.value=it.hcm;edColor.value=toHex(it.color);edTitle.textContent=it.name;document.getElementById('edLock').textContent=it.locked?'Odemknout':'Zamknout';var _f=document.getElementById('edFree');_f.textContent=it.free?'Volne: zap':'Volne';_f.classList.toggle('active',!!it.free);
   document.getElementById('edBuyList').style.display='none';
   document.getElementById('edBuy').style.display=NO_BUY_TYPES.includes(it.type)?'none':'';
-  editor.style.display='flex';editor.style.maxHeight='';const r=editor.getBoundingClientRect();let x=cx+8,y=cy+8;
+  editor.style.display='flex';
+  if(isMobile()){editor.style.left='';editor.style.top='';editor.style.maxHeight='';return;} // spodni panel (CSS)
+  editor.style.maxHeight='';const r=editor.getBoundingClientRect();let x=cx+8,y=cy+8;
   if(x+r.width>window.innerWidth-8)x=window.innerWidth-r.width-8;
   if(y+r.height>window.innerHeight-8)y=window.innerHeight-r.height-8;
   x=Math.max(8,x);y=Math.max(8,y);
@@ -569,7 +604,7 @@ stage.addEventListener('pointerdown',e=>{
 });
 function startPan(e){
   const sx=viewport.scrollLeft,sy=viewport.scrollTop,px=e.clientX,py=e.clientY;viewport.style.cursor='grabbing';
-  function mv(ev){viewport.scrollLeft=sx-(ev.clientX-px);viewport.scrollTop=sy-(ev.clientY-py);}
+  function mv(ev){if(activePointers.size>1)return;viewport.scrollLeft=sx-(ev.clientX-px);viewport.scrollTop=sy-(ev.clientY-py);}
   function up(){viewport.style.cursor='';window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);}
   window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);
 }
@@ -597,7 +632,6 @@ document.getElementById('gridBtn').onclick=function(){gridOn=!gridOn;this.textCo
 /* ---------- Toolbar ---------- */
 document.getElementById('rotBtn').onclick=()=>{const it=cur();if(it)rotate90(it);};
 document.getElementById('delBtn').onclick=()=>{if(selId!=null)removeItem(selId);};
-document.getElementById('snapBtn').onclick=function(){snap=!snap;this.textContent='Prichyt: '+(snap?'zap':'vyp');this.classList.toggle('active',snap);};
 document.getElementById('clearBtn').onclick=()=>{if(confirm('Smazat cele rozvrzeni?')){items.forEach(i=>{const e=document.getElementById('fur'+i.id);if(e)e.remove();});items=[];selId=null;closeEditor();updateStatus();updateCollisions();}};
 function cur(){return items.find(i=>i.id===selId);}
 
@@ -694,6 +728,42 @@ function updateStatus(){
   document.getElementById('stSel').textContent='Vybrano: '+(it?(it.name+' - '+it.wcm+'x'+it.hcm+' cm - '+it.rot+' st.'):'-');
   document.getElementById('stScale').textContent='Meritko: 1 m = '+pxPerM.toFixed(1)+' px';
   document.getElementById('scaleHint').textContent='1 m = '+pxPerM.toFixed(0)+' px';
+}
+
+/* ---------- Dotyk: katalog jako zasuvka + pinch zoom + dvouprstovy posun ---------- */
+function isMobile(){return window.matchMedia('(max-width:820px)').matches;}
+const sidebar=document.getElementById('sidebar'),drawerBg=document.getElementById('drawerBg');
+function openDrawer(){sidebar.classList.add('open');drawerBg.classList.add('show');}
+function closeDrawer(){sidebar.classList.remove('open');drawerBg.classList.remove('show');}
+document.getElementById('catToggle').onclick=()=>sidebar.classList.contains('open')?closeDrawer():openDrawer();
+drawerBg.onclick=closeDrawer;
+
+const activePointers=new Map();let pinch=null;
+window.addEventListener('pointerdown',e=>{
+  if(e.pointerType!=='touch'||!viewport.contains(e.target))return;
+  activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(activePointers.size===2)beginPinch();
+},true);
+window.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='touch'||!activePointers.has(e.pointerId))return;
+  activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&activePointers.size>=2){e.preventDefault();updatePinch();}
+},true);
+function endPointer(e){if(e.pointerType!=='touch')return;activePointers.delete(e.pointerId);if(activePointers.size<2)pinch=null;}
+window.addEventListener('pointerup',endPointer,true);
+window.addEventListener('pointercancel',endPointer,true);
+function beginPinch(){
+  const pts=[...activePointers.values()],r=viewport.getBoundingClientRect();
+  const lx=(pts[0].x+pts[1].x)/2-r.left,ly=(pts[0].y+pts[1].y)/2-r.top;
+  pinch={dist:Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)||1,zoom0:zoom,
+         sx:(viewport.scrollLeft+lx)/zoom,sy:(viewport.scrollTop+ly)/zoom};
+}
+function updatePinch(){
+  const pts=[...activePointers.values()],r=viewport.getBoundingClientRect();
+  const nd=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)||1;
+  const lx=(pts[0].x+pts[1].x)/2-r.left,ly=(pts[0].y+pts[1].y)/2-r.top;
+  zoom=Math.min(4,Math.max(0.2,pinch.zoom0*nd/pinch.dist));applyZoom();
+  viewport.scrollLeft=pinch.sx*zoom-lx;viewport.scrollTop=pinch.sy*zoom-ly;
 }
 
 /* ---------- Start ---------- */
