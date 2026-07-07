@@ -18,6 +18,13 @@
            display:flex;flex-direction:column;overflow:hidden;}
   #sidebar h1{font-size:15px;margin:0;padding:14px 14px 10px;letter-spacing:.3px;}
   #sidebar .sub{font-size:11px;color:var(--muted);padding:0 14px 10px;line-height:1.45;}
+  #helpBtn{display:block;width:calc(100% - 28px);margin:0 14px 10px;background:var(--ok);color:#0f1216;
+           border:none;border-radius:7px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;transition:.12s;}
+  #helpBtn:hover{filter:brightness(1.08);}
+  #catSearch{display:flex;align-items:center;gap:6px;margin:0 14px 10px;padding:6px 9px;
+             background:var(--panel2);border:1px solid var(--line);border-radius:7px;}
+  #catSearch .ic{font-size:13px;opacity:.7;}
+  #catSearch input{flex:1;min-width:0;background:none;border:none;color:var(--txt);font-size:12.5px;outline:none;}
   #catalog{overflow-y:auto;flex:1;padding:0 8px 12px;}
   .cat{margin-top:10px;}
   .cat>.cat-h{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:6px 6px;user-select:none;}
@@ -164,13 +171,19 @@
 <div id="app">
   <aside id="sidebar">
     <h1><a href="index.html" title="Zpet na hlavni stranku" style="color:inherit;text-decoration:none">&#8592; Planovac bytu</a></h1>
-    <div class="sub">Klik = pridat na plan. Leve tlacitko: tahnout nabytek nebo tahnout plochu = posun. Zluty puntik = otoceni. <b>Prave tlacitko</b> = rozmery a barva. Delete = smazat. Kolecko = zoom. Cerveny ram = prekryv.<br><b>Na dotyku:</b> podrz prst na nabytku = rozmery a barva, dva prsty = zoom a posun plochy.</div>
+    <button id="helpBtn" title="Zobrazit navod k ovladani">&#10067; Navod k ovladani</button>
+    <div id="helpPanel" class="sub" style="display:none">Klik = pridat na plan. Leve tlacitko: tahnout nabytek nebo tahnout plochu = posun. Zluty puntik = otoceni. <b>Prave tlacitko</b> = rozmery a barva. Delete = smazat. Kolecko = zoom. Cerveny ram = prekryv.<br><b>Na dotyku:</b> podrz prst na nabytku = rozmery a barva, dva prsty = zoom a posun plochy.</div>
+    <div id="catSearch"><span class="ic">&#128269;</span><input type="text" id="catSearchInput" placeholder="Hledat nabytek..."></div>
     <div id="catalog"></div>
   </aside>
 
   <div id="main">
     <div id="toolbar">
       <button class="btn" id="catToggle" title="Zobrazit katalog nabytku">&#9776; Katalog</button>
+      <button class="btn" id="bgBtn" title="Nahrat vlastni pudorys (PNG/JPG/WEBP). Da se nahrat i vice pudorysu vedle sebe.">Vybrat podklad</button>
+      <input type="file" id="bgInput" accept="image/png,image/jpeg,image/webp,image/*" style="display:none">
+      <button class="btn" id="calibBtn" title="Nastavit meritko podle zname koty">Kalibrovat</button>
+      <div class="sep"></div>
       <button class="btn" id="zoomOut">-</button>
       <span class="zoomlabel" id="zoomLabel">100%</span>
       <button class="btn" id="zoomIn">+</button>
@@ -181,9 +194,6 @@
       <div class="sep"></div>
       <button class="btn" id="gridBtn" title="Zobrazit mrizku (0,5 m)">Mrizka: vyp</button>
       <button class="btn" id="measBtn" title="Zmerit vzdalenost / prochod">Pravitko</button>
-      <button class="btn" id="bgBtn" title="Nahrat vlastni pudorys (PNG/JPG/WEBP). Da se nahrat i vice pudorysu vedle sebe.">Vybrat podklad</button>
-      <input type="file" id="bgInput" accept="image/png,image/jpeg,image/webp,image/*" style="display:none">
-      <button class="btn" id="calibBtn" title="Nastavit meritko podle zname koty">Kalibrovat</button>
       <div class="spacer"></div>
       <span class="hint" id="scaleHint"></span>
       <div class="sep"></div>
@@ -420,13 +430,31 @@ for(const [cat,list] of Object.entries(CATALOG)){
   const c=document.createElement('div');c.className='cat';c.innerHTML='<div class="cat-h">'+cat+'</div>';
   const wrap=document.createElement('div');wrap.className='cat-items';
   for(const [name,w,h,color,type] of list){
-    const b=document.createElement('div');b.className='item';b.title=name+' ('+w+'x'+h+' cm)';
+    const b=document.createElement('div');b.className='item';b.title=name+' ('+w+'x'+h+' cm)';b.dataset.name=name;
     b.innerHTML='<span class="ic">'+furSVG(type,color)+'</span><span class="tx"><span class="n">'+name+'</span><span class="d">'+w+'x'+h+' cm</span></span>';
     b.onclick=()=>{addItem(name,w,h,color,type);if(isMobile())closeDrawer();};
     wrap.appendChild(b);
   }
   c.appendChild(wrap);catEl.appendChild(c);
 }
+
+/* ---------- Navod (schovany za tlacitkem) ---------- */
+document.getElementById('helpBtn').onclick=()=>{const p=document.getElementById('helpPanel');p.style.display=p.style.display==='none'?'block':'none';};
+
+/* ---------- Vyhledavani v katalogu ---------- */
+function foldDiacritics(s){return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
+document.getElementById('catSearchInput').addEventListener('input',function(){
+  const q=foldDiacritics(this.value.trim());
+  document.querySelectorAll('#catalog .cat').forEach(catDiv=>{
+    let any=false;
+    catDiv.querySelectorAll('.item').forEach(itDiv=>{
+      const match=!q||foldDiacritics(itDiv.dataset.name).includes(q);
+      itDiv.style.display=match?'':'none';
+      if(match)any=true;
+    });
+    catDiv.style.display=any?'':'none';
+  });
+});
 
 /* ---------- Geometrie / kolize ---------- */
 function cmToPx(cm){return cm/100*pxPerM;}
